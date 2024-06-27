@@ -1,0 +1,192 @@
+{
+  "Version": "v1",
+  "MappingFields": [
+    {
+      "Name": "Context",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Fixed",
+          "Value": "\"1\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "DataProvider",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Fixed",
+          "Value": "\"\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "Description",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Fixed",
+          "Value": "\"\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "EmailAddress",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Complex",
+          "Value": "\"function getActiveDirectoryEmail(){\\n  return Person.Accounts.MicrosoftActiveDirectory.mail\\n}\\ngetActiveDirectoryEmail();\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "ExternalId",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Field",
+          "Value": "\"Person.ExternalId\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "ExternalStatus",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Fixed",
+          "Value": "\"\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "Function",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Field",
+          "Value": "\"Person.PrimaryContract.Title.Name\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "MiddleName",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Fixed",
+          "Value": "\"\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "PhoneInternal",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Field",
+          "Value": "\"Person.Contact.Personal.Phone.Fixed\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "MobilePhone",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Field",
+          "Value": "\"Person.Contact.Business.Phone.Mobile\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "Status",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create"
+          ],
+          "MappingMode": "Fixed",
+          "Value": "\"0\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    }
+  ],
+  "UniqueFieldNames": []
+}
