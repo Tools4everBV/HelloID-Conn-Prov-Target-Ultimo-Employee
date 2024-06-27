@@ -1,40 +1,10 @@
 #################################################
 # HelloID-Conn-Prov-Target-Ultimo-Employee-Create
-#
-# Version: 1.0.0
+# PowerShell V2
 #################################################
-# Initialize default values
-$config = $configuration | ConvertFrom-Json
-$p = $person | ConvertFrom-Json
-$success = $false
-$auditLogs = [System.Collections.Generic.List[PSCustomObject]]::new()
-
-# Account mapping
-$account = [PSCustomObject]@{
-    Context        = 1
-    DataProvider   = ''
-    Description    = ''
-    EmailAddress   = $p.Contact.Business.Email
-    ExternalId     = $p.ExternalId
-    ExternalStatus = ''
-    Function       = $p.PrimaryContract.Title.Name
-    PhoneInternal  = $p.Contact.Business.Phone.Fixed
-    MiddleName     = ''
-    MobilePhone    = ''
-    Status         = 0
-    #CostCenter     = $p.PrimaryContract.Department.DisplayName
-    #Department     = $p.PrimaryContract.Department.DisplayName
-    #Gender         = '' # either '0001 or 0002'
-}
 
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
-
-# Set debug logging
-switch ($($config.IsDebug)) {
-    $true { $VerbosePreference = 'Continue' }
-    $false { $VerbosePreference = 'SilentlyContinue' }
-}
 
 #region functions
 function Resolve-Ultimo-EmployeeError {
@@ -55,9 +25,12 @@ function Resolve-Ultimo-EmployeeError {
         try {
             if ($ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') {
                 $convertedError = $ErrorObject.ErrorDetails.Message | ConvertFrom-Json
-                $httpErrorObj.ErrorDetails = "Message: $($convertedError.message), code: $($convertedError.code)"
-                $httpErrorObj.FriendlyMessage = $($convertedError.message)
+            } elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
+                $rawErrorObject = [System.IO.StreamReader]::new($ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
+                $convertedError = $rawErrorObject | ConvertFrom-Json
             }
+            $httpErrorObj.ErrorDetails = "Message: $($convertedError.message), code: $($convertedError.code)"
+            $httpErrorObj.FriendlyMessage = $($convertedError.message)
         } catch {
             $httpErrorObj.FriendlyMessage = "Received an unexpected response. The JSON could not be converted, error: [$($_.Exception.Message)]. Original error from web service: [$($ErrorObject.Exception.Message)]"
         }
@@ -66,114 +39,107 @@ function Resolve-Ultimo-EmployeeError {
 }
 #endregion
 
-# Begin
 try {
-    # Verify if [account.ExternalId] has a value
-    if ([string]::IsNullOrEmpty($($account.ExternalId))) {
-        throw 'Mandatory attribute [account.ExternalId] is empty. Please make sure it is correctly mapped'
-    }
+    # Initial Assignments
+    $outputContext.AccountReference = 'Currently not available'
 
     # Set authentication headers
     $splatParams = @{
         Headers = @{
-            APIKey = $($config.APIKey)
+            APIKey = $($actionContext.Configuration.APIKey)
         }
     }
 
-    # Verify if a user must be either [created and correlated], [updated and correlated] or just [correlated]
+    # Validate correlation configuration
+    if ($actionContext.CorrelationConfiguration.Enabled) {
+        $correlationField = $actionContext.CorrelationConfiguration.accountField
+        $correlationValue = $actionContext.CorrelationConfiguration.accountFieldValue
+
+        if ([string]::IsNullOrEmpty($($correlationField))) {
+            throw 'Correlation is enabled but not configured correctly'
+        }
+        if ([string]::IsNullOrEmpty($($correlationValue))) {
+            throw 'Correlation is enabled but [accountFieldValue] is empty. Please make sure it is correctly mapped'
+        }
+    }
+
     try {
-        Write-Verbose "Verifying if Ultimo-Employee account for [$($p.DisplayName)] must be created or correlated"
-        $splatParams['Uri'] = "$($config.BaseUrl)/api/v1/object/Employee('$($account.ExternalId)')"
+        Write-Information "Verifying if Ultimo-Employee account for [$($personContext.Person.DisplayName)] must be created or correlated"
+        $splatParams['Uri'] = "$($actionContext.Configuration.BaseUrl)/api/v1/object/Employee('$correlationValue')"
         $splatParams['Method'] = 'GET'
-        $responseUser = Invoke-RestMethod @splatParams -Verbose:$false
+        $correlatedAccount = Invoke-RestMethod @splatParams -Verbose:$false
     }
     catch {
         $ex = $PSItem
         $errorObj = Resolve-Ultimo-EmployeeError -ErrorObject $ex
-        Write-Verbose $errorObj.ErrorDetails
+        Write-Information $errorObj.ErrorDetails
         if ($ex.Exception.Response.StatusCode -eq 'NotFound') {
-            $responseUser = $null
+            $correlatedAccount = $null
         }
         else {
             throw
         }
     }
 
-    if ($null -eq $responseUser){
-        $action = 'Create-Correlate'
-    } elseif ($($config.UpdatePersonOnCorrelate) -eq $true) {
-        $action = 'Update-Correlate'
+    if ($null -ne $correlatedAccount) {
+        $action = 'CorrelateAccount'
     } else {
-        $action = 'Correlate'
+        $action = 'CreateAccount'
     }
 
-    # Add a warning message showing what will happen during enforcement
-    if ($dryRun -eq $true) {
-        Write-Warning "[DryRun] $action Ultimo-Employee account for: [$($p.DisplayName)], will be executed during enforcement"
+    # Add a message and the result of each of the validations showing what will happen during enforcement
+    if ($actionContext.DryRun -eq $true) {
+        Write-Information "[DryRun] $action Ultimo-Employee account for: [$($personContext.Person.DisplayName)], will be executed during enforcement"
     }
 
     # Process
-    if (-not($dryRun -eq $true)) {
+    if (-not($actionContext.DryRun -eq $true)) {
         switch ($action) {
-            'Create-Correlate' {
-                Write-Verbose 'Creating and correlating Ultimo-Employee account'
-                $body = $account | ConvertTo-Json
-                $splatParams['Uri'] = "$($config.BaseUrl)/api/v1/object/Employee('$($account.ExternalId)')"
+            'CreateAccount' {
+                Write-Information 'Creating and correlating Ultimo-Employee account'
+                $body = $actionContext.Data | ConvertTo-Json
+                $splatParams['Uri'] = "$($actionContext.Configuration.BaseUrl)/api/v1/object/Employee('$correlationValue')"
                 $splatParams['Body'] = [System.Text.Encoding]::UTF8.GetBytes($body)
                 $splatParams['Method'] = 'PUT'
                 $splatParams['ContentType'] = 'application/json'
-                $response = Invoke-RestMethod @splatParams -Verbose:$false
-                $accountReference = $response.Id
+                $createdAccount = Invoke-RestMethod @splatParams -Verbose:$false
+                $outputContext.Data = $createdAccount
+                $outputContext.AccountReference = $createdAccount.Id
+                $auditLogMessage = "Create account was successful. AccountReference is: [$($outputContext.AccountReference)"
                 break
             }
 
-            'Update-Correlate' {
-                Write-Verbose 'Updating and correlating Ultimo-Employee account'
-                $body = $account | ConvertTo-Json
-                $splatParams['Uri'] = "$($config.BaseUrl)/api/v1/object/Employee('$($account.ExternalId)')"
-                $splatParams['Body'] = [System.Text.Encoding]::UTF8.GetBytes($body)
-                $splatParams['Method'] = 'PUT'
-                $splatParams['ContentType'] = 'application/json'
-                $null = Invoke-RestMethod @splatParams -Verbose:$false
-                $accountReference = $responseUser.Id
-                break
-            }
-
-            'Correlate' {
-                Write-Verbose 'Correlating Ultimo-Employee account'
-                $accountReference = $responseUser.Id
+            'CorrelateAccount' {
+                Write-Information 'Correlating Ultimo-Employee account'
+                $outputContext.Data = $correlatedAccount
+                $outputContext.AccountReference = $correlatedAccount.Id
+                $outputContext.AccountCorrelated = $true
+                $auditLogMessage = "Correlated account: [$($correlatedAccount.ExternalId)] on field: [$($correlationField)] with value: [$($correlationValue)]"
                 break
             }
         }
 
-        $success = $true
-        $auditLogs.Add([PSCustomObject]@{
-                Message = "$action account was successful. AccountReference is: [$accountReference]"
+        $outputContext.success = $true
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                Action  = $action
+                Message = $auditLogMessage
                 IsError = $false
             })
     }
 } catch {
-    $success = $false
+    $outputContext.success = $false
     $ex = $PSItem
-    if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException')) {
+    if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
+        $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
         $errorObj = Resolve-Ultimo-EmployeeError -ErrorObject $ex
-        $auditMessage = "Could not $action Ultimo-Employee account. Error: $($errorObj.FriendlyMessage)"
-        Write-Verbose "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
+        $auditMessage = "Could not create or correlate Ultimo-Employee account. Error: $($errorObj.FriendlyMessage)"
+        Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
     } else {
-        $auditMessage = "Could not $action Ultimo-Employee account. Error: $($ex.Exception.Message)"
-        Write-Verbose "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+        $auditMessage = "Could not create or correlate Ultimo-Employee account. Error: $($ex.Exception.Message)"
+        Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
-    $auditLogs.Add([PSCustomObject]@{
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
             Message = $auditMessage
             IsError = $true
         })
-# End
-} finally {
-    $result = [PSCustomObject]@{
-        Success          = $success
-        AccountReference = $accountReference
-        Auditlogs        = $auditLogs
-        Account          = $account
-    }
-    Write-Output $result | ConvertTo-Json -Depth 10
 }
